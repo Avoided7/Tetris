@@ -11,20 +11,13 @@ internal class GameControllerBuilder
   private IInputSource _inputSource = new ConsoleInput();
   public GameControllerBuilder SetDifficult(Difficult difficult = Difficult.Normal)
   {
-    switch (difficult)
+    _gameSpeed = difficult switch
     {
-      case Difficult.Easy:
-        _gameSpeed = 0.5f;
-        break;
-      case Difficult.Normal:
-        _gameSpeed = 1f;
-        break;
-      case Difficult.Hard:
-        _gameSpeed = 2f;
-        break;
-      default:
-        throw new ArgumentException("Incorrect enum value.");
-    }
+        Difficult.Easy => 0.5f,
+        Difficult.Normal => 1f,
+        Difficult.Hard => 2f,
+        _ => throw new ArgumentException("Incorrect enum value."),
+    };
     return this;
   }
 

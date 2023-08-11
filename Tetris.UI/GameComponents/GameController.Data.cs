@@ -6,7 +6,7 @@ internal partial class GameController
 {
   // Game Settings
   private readonly float _gameSpeed = 1f;
-  private readonly int _frameTimeInMilliseconds = 100;
+  private readonly int _frameTimeInMilliseconds = 200;
 
   // Input & Output Source
   private readonly IInputSource _inputSource;
@@ -18,8 +18,8 @@ internal partial class GameController
   private readonly int[,] _map;
 
   // Threads
-  private Thread _updateThread = null!;
-  private Thread _controlThread = null!;
+  private readonly Thread _updateThread = null!;
+  private readonly Thread _controlThread = null!;
 
   // Figures
   private Figure _currentFigure;
@@ -30,9 +30,12 @@ internal partial class GameController
   private int _placedFigures;
 
   // Control Keys
-  private readonly ConsoleKey _rotateKey = ConsoleKey.R;
+  private readonly ConsoleKey _rotateKey = ConsoleKey.UpArrow;
   private readonly ConsoleKey _leftKey = ConsoleKey.LeftArrow;
   private readonly ConsoleKey _rightKey = ConsoleKey.RightArrow;
+
+  // Sync
+  private object _sync = new();
 
   public GameController(
     float gameSpeed = 1f,
@@ -50,8 +53,8 @@ internal partial class GameController
     int height,
     int width)
   {
-    _updateThread = new Thread(() => Timer());
-    _controlThread = new Thread(() => Input());
+    _updateThread = new Thread(Timer);
+    _controlThread = new Thread(Input);
 
     if (outputSource is not null)
     {

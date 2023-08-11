@@ -7,6 +7,8 @@ internal partial class GameController
 {
   public void Start()
   {
+    _outputSource.Write("Loading...");
+    
     BuildMap();
 
     _outputSource.SetColor(Constants.BASE_COLOR);
@@ -24,6 +26,8 @@ internal partial class GameController
     {
       if (!TryMoveDownFigure())
       {
+        ClearMapFromHorizontalLines();
+
         _placedFigures += 1;
         _score += _placedFigures;
 
@@ -58,61 +62,63 @@ internal partial class GameController
 
       if(pressedKey == _rotateKey)
       {
-        _outputSource.Write("Rotated!");
-        _currentFigure.Rotate();
+        TryRotateFigure();
       }
 
       if(pressedKey == _leftKey)
       {
-        TryChangePosition(_currentFigure.Height, _currentFigure.Width - 1);
+        TryChangePosition(_currentFigure.HeightPosition, _currentFigure.WidthPosition - 1);
       }
 
       if(pressedKey == _rightKey)
       {
-        TryChangePosition(_currentFigure.Height, _currentFigure.Width + 1);
+        TryChangePosition(_currentFigure.HeightPosition, _currentFigure.WidthPosition + 1);
       }
     }
   }
 
   private bool TryChangePosition(int newHeight, int newWidth)
   {
-    int oldHeight = _currentFigure.Height;
-    int oldWidth = _currentFigure.Width;
-
-    int wall = 1;
-
-    if(newHeight + _currentFigure.Volume.GetLength(0) > _heightMap ||
-       newWidth + _currentFigure.Volume.GetLength(1) > _widthMap - wall || 
-       newWidth < wall)
+    lock (_sync)
     {
-      return false;
-    }
+      int oldHeight = _currentFigure.HeightPosition;
+      int oldWidth = _currentFigure.WidthPosition;
 
-    UpdateCurrentFigureOnMap(FigureUpdateType.Clear);
+      int wall = 1;
 
-    _currentFigure.Height = newHeight;
-    _currentFigure.Width = newWidth;
+      bool isSucceeded = true;
 
-    if(IsCollision())
-    {
-      _currentFigure.Height = oldHeight;
-      _currentFigure.Width = oldWidth;
+      if (newHeight + _currentFigure.Height > _heightMap ||
+         newWidth + _currentFigure.Width > _widthMap - wall ||
+         newWidth < wall)
+      {
+        return false;
+      }
+
+      UpdateCurrentFigureOnMap(FigureUpdateType.Clear);
+
+      _currentFigure.HeightPosition = newHeight;
+      _currentFigure.WidthPosition = newWidth;
+
+      if (IsCollision())
+      {
+        _currentFigure.HeightPosition = oldHeight;
+        _currentFigure.WidthPosition = oldWidth;
+
+        isSucceeded = false;
+      }
 
       UpdateCurrentFigureOnMap(FigureUpdateType.Set);
 
-      return false;
+      return isSucceeded;
     }
-
-    UpdateCurrentFigureOnMap(FigureUpdateType.Set);
-
-    return true;
   }
 
   private bool TryMoveDownFigure()
   {
-    bool changedPosition = TryChangePosition(_currentFigure.Height + 1, _currentFigure.Width);
+    bool changedPosition = TryChangePosition(_currentFigure.HeightPosition + 1, _currentFigure.WidthPosition);
 
-    if(!changedPosition && _currentFigure.Height < 0)
+    if(!changedPosition && _currentFigure.HeightPosition < 0)
     {
       throw new Exception("Game ended.");
     }
@@ -120,20 +126,43 @@ internal partial class GameController
     return changedPosition;
   }
 
+  private bool TryRotateFigure()
+  {
+    bool isSucceeded = true;
+    UpdateCurrentFigureOnMap(FigureUpdateType.Clear);
+
+    _currentFigure.Rotate();
+
+    if(IsCollision())
+    {
+      _currentFigure.Rotate(false);
+      isSucceeded = false;
+    }
+
+    UpdateCurrentFigureOnMap(FigureUpdateType.Set);
+
+    return isSucceeded;
+  }
+
   private bool IsCollision()
   {
     int emptyObject = (int)Objects.Empty;
 
-    for (int height = _currentFigure.Height; height < _currentFigure.Height + _currentFigure.Volume.GetLength(0); height++)
+    for (int height = _currentFigure.HeightPosition; height < _currentFigure.HeightPosition + _currentFigure.Height; height++)
     {
-      for(int width = _currentFigure.Width; width < _currentFigure.Width + _currentFigure.Volume.GetLength(1); width++)
+      for(int width = _currentFigure.WidthPosition; width < _currentFigure.WidthPosition + _currentFigure.Width; width++)
       {
         if(height < 0)
         {
           continue;
         }
 
-        if (_map[height, width] != emptyObject && _currentFigure.Volume[height - _currentFigure.Height, width - _currentFigure.Width] != emptyObject)
+        if (width >= _widthMap)
+        {
+          return true;
+        }
+
+        if (_map[height, width] != emptyObject && _currentFigure[height - _currentFigure.HeightPosition, width - _currentFigure.WidthPosition] != emptyObject)
         {
           return true;
         }
@@ -144,25 +173,18 @@ internal partial class GameController
 
   private void UpdateCurrentFigureOnMap(FigureUpdateType updateType)
   {
-    int newValue = -1;
-
-    switch(updateType)
+    int newValue = updateType switch
     {
-      case FigureUpdateType.Clear:
-        newValue = (int)Objects.Empty;
-        break;
-      case FigureUpdateType.Set:
-        newValue = (int)Objects.Block;
-        break;
-      default:
-        throw new ArgumentException($"Incorrect argument. {nameof(updateType)}");
-    }
+        FigureUpdateType.Clear => (int)Objects.Empty,
+        FigureUpdateType.Set => (int)Objects.Block,
+        _ => throw new ArgumentException($"Incorrect argument. {nameof(updateType)}"),
+    };
 
-    int figurePositionHeight = _currentFigure.Height;
-    int figurePositionWidth = _currentFigure.Width;
+    int figurePositionHeight = _currentFigure.HeightPosition;
+    int figurePositionWidth = _currentFigure.WidthPosition;
 
-    int heightFigure = _currentFigure.Volume.GetLength(0);
-    int widthFigure = _currentFigure.Volume.GetLength(1);
+    int heightFigure = _currentFigure.Height;
+    int widthFigure = _currentFigure.Width;
 
     for (int height = 0; height < heightFigure; height++)
     {
@@ -171,7 +193,7 @@ internal partial class GameController
         int correctHeight = figurePositionHeight + height;
         int correctWidth = figurePositionWidth + width;
 
-        if (correctHeight < 0 || _currentFigure.Volume[height, width] == 0)
+        if (correctHeight < 0 || _currentFigure[height, width] == 0)
         {
           continue;
         }
@@ -179,16 +201,6 @@ internal partial class GameController
         _map[correctHeight, correctWidth] = newValue;
       }
     }
-  }
-
-  private Figure GenerateRandomFigure()
-  {
-    Figure newFigure = new Figure((FigureType)Random.Shared.Next(Constants.FIGURE_TYPES_COUNT));
-
-    newFigure.Height = -newFigure.Volume.GetLength(0);
-    newFigure.Width = 1;
-
-    return newFigure;
   }
 
   private void BuildMap()
@@ -204,9 +216,49 @@ internal partial class GameController
     }
   }
 
+  private void ClearMapFromHorizontalLines()
+  {
+    for(int height = 0; height < _heightMap; height++)
+    {
+      bool lineIsFilled = true;
+      for (int width = 1; width < _widthMap - 1; width++)
+      {
+        if(_map[height, width] != (int) Objects.Block)
+        {
+          lineIsFilled = false;
+          break;
+        }
+      }
+
+      if(!lineIsFilled)
+      {
+        continue;
+      }
+
+      ClearLine(height);
+    }
+  }
+
+  private void ClearLine(int height)
+  {
+    for(int currentHeight = height; currentHeight >= 0; currentHeight--)
+    {
+      for(int currentWidth = 1; currentWidth < _widthMap - 1; currentWidth++)
+      {
+        if(currentHeight == 0)
+        {
+          _map[currentHeight, currentWidth] = (int) Objects.Empty;
+          continue;
+        }
+
+        _map[currentHeight, currentWidth] = _map[currentHeight - 1, currentWidth];
+      }
+    }
+  }
+
   private string GetMapAsString()
   {
-    StringBuilder map = new StringBuilder();
+    StringBuilder map = new ();
 
     for (int height = 0; height < _heightMap; height++)
     {
@@ -225,7 +277,7 @@ internal partial class GameController
             break;
         }
       }
-      map.Append("\n");
+      map.Append('\n');
     }
 
     return map.ToString();
@@ -256,5 +308,16 @@ internal partial class GameController
   {
     _controlThread.Interrupt();
     _updateThread.Interrupt();
+  }
+
+  // Static
+  private static Figure GenerateRandomFigure()
+  {
+    Figure newFigure = new Figure((FigureType)Random.Shared.Next(Constants.FIGURE_TYPES_COUNT));
+
+    newFigure.HeightPosition = -newFigure.Height;
+    newFigure.WidthPosition = 1;
+
+    return newFigure;
   }
 }
