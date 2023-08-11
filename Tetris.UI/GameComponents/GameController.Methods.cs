@@ -157,7 +157,7 @@ internal partial class GameController
           continue;
         }
 
-        if (width >= _widthMap)
+        if (width >= _widthMap || height >= _heightMap)
         {
           return true;
         }
