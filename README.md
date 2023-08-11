@@ -1,1 +1,3 @@
-# Tetris
+# 🎮 Tetris
+
+Simple Tetris in console.
